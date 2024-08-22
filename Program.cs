@@ -5,14 +5,8 @@ var app = builder.Build();
 
 app.UseWebSockets();
 
-app.MapGet("/{id}", async context =>
-{
-    await WebSocket.Manager.WebSocketManager.HandleWebSocketRequestAsync(context);
-});
+app.MapGet("/{id}", CustomWebSocketManager.HandleWebSocketRequestAsync);
 
-app.MapPost("/send/{id}", async context =>
-{
-    await WebSocket.Manager.WebSocketManager.SendMessageAsync(context);
-});
+app.MapPost("/send/{id}", CustomWebSocketManager.SendMessageAsync);
 
 await app.RunAsync();

@@ -5,7 +5,7 @@ namespace WebSocket.Manager;
 
 using System.Net.WebSockets;
 
-public static class WebSocketManager
+public static class CustomWebSocketManager
 {
     private static readonly SemaphoreSlim _semaphore = new(1, 1);
     private static readonly Dictionary<string, WebSocket> _webSocketConnections = [];
@@ -81,6 +81,7 @@ public static class WebSocketManager
         var message = await reader.ReadToEndAsync();
 
         var data = Encoding.UTF8.GetBytes(message);
+        
         await webSocket.SendAsync(new ArraySegment<byte>(data), WebSocketMessageType.Text, true, CancellationToken.None);
 
         context.Response.StatusCode = (int)HttpStatusCode.OK;
