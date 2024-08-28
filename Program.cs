@@ -5,7 +5,7 @@ var app = builder.Build();
 
 app.UseWebSockets();
 
-app.MapGet("/{id}", CustomWebSocketManager.HandleWebSocketRequestAsync);
+app.MapGet("/{group}/{id}", CustomWebSocketManager.HandleWebSocketRequestAsync);
 
 app.MapPost("/send/{id}", CustomWebSocketManager.SendMessageAsync);
 

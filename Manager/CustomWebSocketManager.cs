@@ -4,16 +4,17 @@ using System.Text;
 namespace WebSocket.Manager;
 
 using System.Net.WebSockets;
-using static System.Runtime.InteropServices.JavaScript.JSType;
 
 public static class CustomWebSocketManager
 {
     private static readonly SemaphoreSlim _semaphore = new(1, 1);
-    private static readonly Dictionary<string, WebSocket> _webSocketConnections = [];
+    private static readonly Dictionary<string, (WebSocket Websocket, string? Group)> _webSocketConnections = [];
 
     public static async Task HandleWebSocketRequestAsync(HttpContext context)
     {
-        var id = context.Request.RouteValues["id"]?.ToString();
+        string? id = context.Request.RouteValues["id"]?.ToString();
+        string? group = context.Request.RouteValues["group"]?.ToString();
+
         if (string.IsNullOrEmpty(id))
         {
             context.Response.StatusCode = (int)HttpStatusCode.BadRequest;
@@ -28,31 +29,33 @@ public static class CustomWebSocketManager
             return;
         }
 
-        var webSocket = await context.WebSockets.AcceptWebSocketAsync();
-        await _semaphore.WaitAsync();  
+        (WebSocket Websocket, string? Group) completWebSocket = (await context.WebSockets.AcceptWebSocketAsync(), group);
+
+        await _semaphore.WaitAsync();
         try
         {
             if (_webSocketConnections.TryGetValue(id, out var existingWebSocket))
             {
-                if (existingWebSocket.State == WebSocketState.Open)
+                if (existingWebSocket.Websocket.State == WebSocketState.Open)
                 {
-                    existingWebSocket.Abort();
+                    existingWebSocket.Websocket.Abort();
                 }
                 _webSocketConnections.Remove(id);
             }
-            _webSocketConnections[id] = webSocket;
+            _webSocketConnections[id] = completWebSocket!;
         }
         finally
         {
-            _semaphore.Release();  
+            _semaphore.Release();
         }
 
-        await HandleWebSocketConnectionAsync(id, webSocket);
+        await HandleWebSocketConnectionAsync(id, completWebSocket!);
     }
 
     public static async Task SendMessageAsync(HttpContext context)
     {
-        var id = context.Request.RouteValues["id"]?.ToString();
+        string? id = context.Request.RouteValues["id"]?.ToString();
+
         if (string.IsNullOrEmpty(id))
         {
             context.Response.StatusCode = (int)HttpStatusCode.BadRequest;
@@ -60,7 +63,7 @@ public static class CustomWebSocketManager
             return;
         }
 
-        WebSocket? webSocket;
+        (WebSocket Websocket, string? Group) webSocket;
         await _semaphore.WaitAsync();
         try
         {
@@ -71,49 +74,61 @@ public static class CustomWebSocketManager
             _semaphore.Release();
         }
 
-        if (webSocket == null || webSocket.State != WebSocketState.Open)
+        if (webSocket.Websocket == null || webSocket.Websocket.State != WebSocketState.Open)
         {
             context.Response.StatusCode = (int)HttpStatusCode.BadRequest;
             await context.Response.WriteAsync("WebSocket connection is not open.");
             return;
         }
 
-        using var reader = new StreamReader(context.Request.Body);
-        var message = await reader.ReadToEndAsync();
+        using StreamReader reader = new(context.Request.Body);
+        string? message = await reader.ReadToEndAsync();
 
-        var data = Encoding.UTF8.GetBytes(message);
+        byte[]? data = Encoding.UTF8.GetBytes(message);
 
-        await webSocket.SendAsync(new ArraySegment<byte>(data), WebSocketMessageType.Text, true, CancellationToken.None);
+        var websocketConnections = _webSocketConnections.Where(x => x.Value.Group == webSocket.Group);
+
+        foreach (var websocketConnection in websocketConnections)
+        {
+            await websocketConnection.Value.Websocket.SendAsync(new ArraySegment<byte>(data), WebSocketMessageType.Text, true, CancellationToken.None);
+        }
 
         context.Response.StatusCode = (int)HttpStatusCode.OK;
         await context.Response.WriteAsync("Message sent via WebSocket.");
     }
 
-    private static async Task HandleWebSocketConnectionAsync(string id, WebSocket webSocket)
+    private static async Task HandleWebSocketConnectionAsync(string id, (WebSocket Websocket, string? Group) webSocket)
     {
-        var buffer = new byte[1024 * 4];
+        byte[]? buffer = new byte[1024 * 4];
         try
         {
-            while (webSocket.State == WebSocketState.Open)
+            while (webSocket.Websocket.State == WebSocketState.Open)
             {
-                var result = await webSocket.ReceiveAsync(new ArraySegment<byte>(buffer), CancellationToken.None);
+                var result = await webSocket.Websocket.ReceiveAsync(new ArraySegment<byte>(buffer), CancellationToken.None);
                 if (result.MessageType == WebSocketMessageType.Close)
                 {
-                    await _semaphore.WaitAsync();  
+                    await _semaphore.WaitAsync();
                     try
                     {
                         _webSocketConnections.Remove(id);
                     }
                     finally
                     {
-                        _semaphore.Release();  
+                        _semaphore.Release();
                     }
-                    await webSocket.CloseAsync(WebSocketCloseStatus.NormalClosure, "Closed by the server", CancellationToken.None);
+                    await webSocket.Websocket.CloseAsync(WebSocketCloseStatus.NormalClosure, "Closed by the server", CancellationToken.None);
                 }
                 else
                 {
-                    var data = Encoding.UTF8.GetBytes(Encoding.UTF8.GetString(buffer, 0, result.Count));
-                    await webSocket.SendAsync(new ArraySegment<byte>(data), WebSocketMessageType.Text, true, CancellationToken.None);
+                    byte[]? data = Encoding.UTF8.GetBytes(Encoding.UTF8.GetString(buffer, 0, result.Count));
+
+                    var websocketConnections = _webSocketConnections.Where(x => x.Value.Group == webSocket.Group);
+
+                    foreach (var websocketConnection in websocketConnections)
+                    {
+                        await websocketConnection.Value.Websocket.SendAsync(new ArraySegment<byte>(data), WebSocketMessageType.Text, true, CancellationToken.None);
+                    }
+
                 }
             }
         }
@@ -123,14 +138,14 @@ public static class CustomWebSocketManager
         }
         finally
         {
-            await _semaphore.WaitAsync();  
+            await _semaphore.WaitAsync();
             try
             {
                 _webSocketConnections.Remove(id);
             }
             finally
             {
-                _semaphore.Release();  
+                _semaphore.Release();
             }
         }
     }
