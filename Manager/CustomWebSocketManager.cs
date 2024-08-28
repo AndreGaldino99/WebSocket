@@ -4,6 +4,7 @@ using System.Text;
 namespace WebSocket.Manager;
 
 using System.Net.WebSockets;
+using static System.Runtime.InteropServices.JavaScript.JSType;
 
 public static class CustomWebSocketManager
 {
@@ -60,14 +61,14 @@ public static class CustomWebSocketManager
         }
 
         WebSocket? webSocket;
-        await _semaphore.WaitAsync();  
+        await _semaphore.WaitAsync();
         try
         {
             _webSocketConnections.TryGetValue(id, out webSocket);
         }
         finally
         {
-            _semaphore.Release();  
+            _semaphore.Release();
         }
 
         if (webSocket == null || webSocket.State != WebSocketState.Open)
@@ -81,7 +82,7 @@ public static class CustomWebSocketManager
         var message = await reader.ReadToEndAsync();
 
         var data = Encoding.UTF8.GetBytes(message);
-        
+
         await webSocket.SendAsync(new ArraySegment<byte>(data), WebSocketMessageType.Text, true, CancellationToken.None);
 
         context.Response.StatusCode = (int)HttpStatusCode.OK;
@@ -111,7 +112,8 @@ public static class CustomWebSocketManager
                 }
                 else
                 {
-                    
+                    var data = Encoding.UTF8.GetBytes(Encoding.UTF8.GetString(buffer, 0, result.Count));
+                    await webSocket.SendAsync(new ArraySegment<byte>(data), WebSocketMessageType.Text, true, CancellationToken.None);
                 }
             }
         }
