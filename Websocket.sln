@@ -3,9 +3,9 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.11.35219.272
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Websocket.Api", "Websocket.Api.csproj", "{62103393-A024-4B16-97E6-29C290FC88A0}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Websocket.Api", "Websocket.Api\Websocket.Api.csproj", "{62103393-A024-4B16-97E6-29C290FC88A0}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Websocket.Service", "..\Websocket.Service\Websocket.Service.csproj", "{92F866D9-8B49-4675-B242-2468BE740A78}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Websocket.Service", "Websocket.Service\Websocket.Service.csproj", "{92F866D9-8B49-4675-B242-2468BE740A78}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
