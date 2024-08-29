@@ -14,4 +14,8 @@
     <ProjectReference Include="..\Websocket.Service\Websocket.Service.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Folder Include="wwwroot\swagger-ui\" />
+  </ItemGroup>
+
 </Project>
