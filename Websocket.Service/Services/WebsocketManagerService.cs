@@ -1,7 +1,9 @@
 ﻿using Microsoft.AspNetCore.Http;
+using Newtonsoft.Json;
 using System.Net;
 using System.Net.WebSockets;
 using System.Text;
+using Websocket.Arguments;
 using Websocket.Service.Interfaces;
 
 namespace Websocket.Service.Services;
@@ -11,7 +13,7 @@ public class WebsocketManagerService : IWebsocketManagerService
     private static readonly SemaphoreSlim _semaphore = new(1, 1);
     private static readonly Dictionary<string, (WebSocket Websocket, string? Group)> _webSocketConnections = [];
 
-    public async Task HandleWebSocketRequestAsync(HttpContext context, string? group, string? id)
+    public async Task HandleWebSocketRequestAsync(HttpContext context, string? group, string? id, string? geminiKey)
     {
         if (string.IsNullOrEmpty(id))
         {
@@ -47,10 +49,10 @@ public class WebsocketManagerService : IWebsocketManagerService
             _semaphore.Release();
         }
 
-        await HandleWebSocketConnectionAsync(id, completWebSocket!);
+        await HandleWebSocketConnectionAsync(id, completWebSocket!, geminiKey);
     }
 
-    private static async Task HandleWebSocketConnectionAsync(string id, (WebSocket Websocket, string? Group) webSocket)
+    private static async Task HandleWebSocketConnectionAsync(string id, (WebSocket Websocket, string? Group) webSocket, string? geminiKey)
     {
         byte[]? buffer = new byte[1024 * 4];
         try
@@ -73,7 +75,7 @@ public class WebsocketManagerService : IWebsocketManagerService
                 }
                 else
                 {
-                    byte[]? data = Encoding.UTF8.GetBytes(Encoding.UTF8.GetString(buffer, 0, result.Count));
+                    byte[]? data = Encoding.UTF8.GetBytes(await SendGeminiRequest(Encoding.UTF8.GetString(buffer, 0, result.Count), geminiKey));
 
                     var websocketConnections = _webSocketConnections.Where(x => x.Value.Group == webSocket.Group);
 
@@ -144,5 +146,34 @@ public class WebsocketManagerService : IWebsocketManagerService
 
         context.Response.StatusCode = (int)HttpStatusCode.OK;
         await context.Response.WriteAsync("Message sent via WebSocket.");
+    }
+
+    public static async Task<string> SendGeminiRequest(string message, string? geminiKey)
+    {
+        string url = $"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={geminiKey}";
+
+        using HttpClient client = new();
+        var jsonContent = JsonConvert.SerializeObject(new GeminiRequest([new([new PartRequest(message)])]));
+
+        var content = new StringContent(jsonContent, Encoding.UTF8, "application/json");
+
+        try
+        {
+            HttpResponseMessage response = await client.PostAsync(url, content);
+
+            if (response.IsSuccessStatusCode)
+            {
+                var res = JsonConvert.DeserializeObject<GeminiResponse>(await response.Content.ReadAsStringAsync());
+                return res?.Candidates?[0]?.Content?.Parts?[0]?.Text ?? "";
+            }
+            else
+            {
+                return ("Erro: " + response.StatusCode);
+            }
+        }
+        catch (HttpRequestException e)
+        {
+            return ("Erro na requisição: " + e.Message);
+        }
     }
 }

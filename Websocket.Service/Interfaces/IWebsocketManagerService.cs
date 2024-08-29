@@ -4,6 +4,6 @@ namespace Websocket.Service.Interfaces;
 
 public interface IWebsocketManagerService
 {
-    Task HandleWebSocketRequestAsync(HttpContext context, string? id, string? group);
+    Task HandleWebSocketRequestAsync(HttpContext context, string? id, string? group, string? geminiKey);
     Task SendMessageAsync(HttpContext context, string? id);
 }

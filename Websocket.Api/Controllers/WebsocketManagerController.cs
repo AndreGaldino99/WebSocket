@@ -8,9 +8,9 @@ namespace Websocket.Api.Controllers;
 public class WebsocketManagerController(IWebsocketManagerService _websocketManagerService) : Controller
 {
     [HttpGet("{group}/{id}")]
-    public async Task HandleWebSocketRequestAsync(string group, string id)
+    public async Task HandleWebSocketRequestAsync([FromRoute]string group, [FromRoute]string id, [FromQuery]string? geminiKey)
     {
-        await _websocketManagerService.HandleWebSocketRequestAsync(HttpContext, group, id);
+        await _websocketManagerService.HandleWebSocketRequestAsync(HttpContext, group, id, geminiKey);
     }
 
     [HttpPost("send/{id}")]
