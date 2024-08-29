@@ -1,20 +1,18 @@
-﻿using System.Net;
-using System.Text;
-
-namespace WebSocket.Manager;
-
+﻿using Microsoft.AspNetCore.Http;
+using System.Net;
 using System.Net.WebSockets;
+using System.Text;
+using Websocket.Service.Interfaces;
 
-public static class CustomWebSocketManager
+namespace Websocket.Service.Services;
+
+public class WebsocketManagerService : IWebsocketManagerService
 {
     private static readonly SemaphoreSlim _semaphore = new(1, 1);
     private static readonly Dictionary<string, (WebSocket Websocket, string? Group)> _webSocketConnections = [];
 
-    public static async Task HandleWebSocketRequestAsync(HttpContext context)
+    public async Task HandleWebSocketRequestAsync(HttpContext context, string? group, string? id)
     {
-        string? id = context.Request.RouteValues["id"]?.ToString();
-        string? group = context.Request.RouteValues["group"]?.ToString();
-
         if (string.IsNullOrEmpty(id))
         {
             context.Response.StatusCode = (int)HttpStatusCode.BadRequest;
@@ -50,51 +48,6 @@ public static class CustomWebSocketManager
         }
 
         await HandleWebSocketConnectionAsync(id, completWebSocket!);
-    }
-
-    public static async Task SendMessageAsync(HttpContext context)
-    {
-        string? id = context.Request.RouteValues["id"]?.ToString();
-
-        if (string.IsNullOrEmpty(id))
-        {
-            context.Response.StatusCode = (int)HttpStatusCode.BadRequest;
-            await context.Response.WriteAsync("ID is required.");
-            return;
-        }
-
-        (WebSocket Websocket, string? Group) webSocket;
-        await _semaphore.WaitAsync();
-        try
-        {
-            _webSocketConnections.TryGetValue(id, out webSocket);
-        }
-        finally
-        {
-            _semaphore.Release();
-        }
-
-        if (webSocket.Websocket == null || webSocket.Websocket.State != WebSocketState.Open)
-        {
-            context.Response.StatusCode = (int)HttpStatusCode.BadRequest;
-            await context.Response.WriteAsync("WebSocket connection is not open.");
-            return;
-        }
-
-        using StreamReader reader = new(context.Request.Body);
-        string? message = await reader.ReadToEndAsync();
-
-        byte[]? data = Encoding.UTF8.GetBytes(message);
-
-        var websocketConnections = _webSocketConnections.Where(x => x.Value.Group == webSocket.Group);
-
-        foreach (var websocketConnection in websocketConnections)
-        {
-            await websocketConnection.Value.Websocket.SendAsync(new ArraySegment<byte>(data), WebSocketMessageType.Text, true, CancellationToken.None);
-        }
-
-        context.Response.StatusCode = (int)HttpStatusCode.OK;
-        await context.Response.WriteAsync("Message sent via WebSocket.");
     }
 
     private static async Task HandleWebSocketConnectionAsync(string id, (WebSocket Websocket, string? Group) webSocket)
@@ -148,5 +101,48 @@ public static class CustomWebSocketManager
                 _semaphore.Release();
             }
         }
+    }
+
+    public async Task SendMessageAsync(HttpContext context, string? id)
+    {
+        if (string.IsNullOrEmpty(id))
+        {
+            context.Response.StatusCode = (int)HttpStatusCode.BadRequest;
+            await context.Response.WriteAsync("ID is required.");
+            return;
+        }
+
+        (WebSocket Websocket, string? Group) webSocket;
+        await _semaphore.WaitAsync();
+        try
+        {
+            _webSocketConnections.TryGetValue(id, out webSocket);
+        }
+        finally
+        {
+            _semaphore.Release();
+        }
+
+        if (webSocket.Websocket == null || webSocket.Websocket.State != WebSocketState.Open)
+        {
+            context.Response.StatusCode = (int)HttpStatusCode.BadRequest;
+            await context.Response.WriteAsync("WebSocket connection is not open.");
+            return;
+        }
+
+        using StreamReader reader = new(context.Request.Body);
+        string? message = await reader.ReadToEndAsync();
+
+        byte[]? data = Encoding.UTF8.GetBytes(message);
+
+        var websocketConnections = _webSocketConnections.Where(x => x.Value.Group == webSocket.Group);
+
+        foreach (var websocketConnection in websocketConnections)
+        {
+            await websocketConnection.Value.Websocket.SendAsync(new ArraySegment<byte>(data), WebSocketMessageType.Text, true, CancellationToken.None);
+        }
+
+        context.Response.StatusCode = (int)HttpStatusCode.OK;
+        await context.Response.WriteAsync("Message sent via WebSocket.");
     }
 }
