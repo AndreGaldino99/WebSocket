@@ -13,10 +13,10 @@ public class WebsocketManagerController(IWebsocketManagerService _websocketManag
         await _websocketManagerService.HandleWebSocketRequestAsync(HttpContext, group, id);
     }
 
-    [HttpPost("send/{id}")]
-    public async Task<IActionResult> SendMessageAsync(string id)
+    [HttpPost("send/{groupId}")]
+    public async Task<IActionResult> SendMessageAsync(string groupId, int messageType)
     {
-        await _websocketManagerService.SendMessageAsync(HttpContext, id);
+        await _websocketManagerService.SendMessageAsync(HttpContext, groupId, messageType);
         return Ok();
     }
 }

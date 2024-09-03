@@ -103,39 +103,21 @@ public class WebsocketManagerService : IWebsocketManagerService
         }
     }
 
-    public async Task SendMessageAsync(HttpContext context, string? id)
+    // 0 = Iniciando processo (load)
+    // 1 = Sucesso request (recarrega pagina)
+    // 2 = Erro (oculta loading)
+    public async Task SendMessageAsync(HttpContext context, string? groupId, int messageType)
     {
-        if (string.IsNullOrEmpty(id))
+        if (string.IsNullOrEmpty(groupId))
         {
             context.Response.StatusCode = (int)HttpStatusCode.BadRequest;
             await context.Response.WriteAsync("ID is required.");
             return;
         }
 
-        (WebSocket Websocket, string? Group) webSocket;
-        await _semaphore.WaitAsync();
-        try
-        {
-            _webSocketConnections.TryGetValue(id, out webSocket);
-        }
-        finally
-        {
-            _semaphore.Release();
-        }
+        byte[]? data = Encoding.UTF8.GetBytes(messageType.ToString());
 
-        if (webSocket.Websocket == null || webSocket.Websocket.State != WebSocketState.Open)
-        {
-            context.Response.StatusCode = (int)HttpStatusCode.BadRequest;
-            await context.Response.WriteAsync("WebSocket connection is not open.");
-            return;
-        }
-
-        using StreamReader reader = new(context.Request.Body);
-        string? message = await reader.ReadToEndAsync();
-
-        byte[]? data = Encoding.UTF8.GetBytes(message);
-
-        var websocketConnections = _webSocketConnections.Where(x => x.Value.Group == webSocket.Group);
+        var websocketConnections = _webSocketConnections.Where(x => x.Value.Group == groupId);
 
         foreach (var websocketConnection in websocketConnections)
         {
